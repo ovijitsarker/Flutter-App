@@ -5,6 +5,145 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:flutter/foundation.dart';
+import 'aes_helper.dart';
+
+// Config Page
+class ConfigPage extends StatefulWidget {
+  const ConfigPage({Key? key}) : super(key: key);
+
+  @override
+  State<ConfigPage> createState() => _ConfigPageState();
+}
+
+class _ConfigPageState extends State<ConfigPage> {
+  final _storage = const FlutterSecureStorage();
+  String? _secretKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSecretKey();
+  }
+
+  Future<void> _loadSecretKey() async {
+    final key = await _storage.read(key: 'secret_key');
+    setState(() {
+      _secretKey = key;
+    });
+  }
+
+  Future<void> _saveSecretKey(String value) async {
+    await _storage.write(key: 'secret_key', value: value);
+    setState(() {
+      _secretKey = value;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Secret Key saved!')));
+  }
+
+  void _showEditDialog() {
+    final controller = TextEditingController(text: _secretKey ?? '');
+    showDialog(
+      context: context,
+      builder: (context) {
+        String? errorText;
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Edit Secret Key'),
+            content: TextField(
+              controller: controller,
+              maxLength: 16,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: 'Enter 16 character secret key',
+                errorText: errorText,
+              ),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final value = controller.text;
+                  if (value.length != 16) {
+                    setState(
+                      () => errorText =
+                          'Secret Key must be exactly 16 characters',
+                    );
+                    return;
+                  }
+                  _saveSecretKey(value);
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Config')),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Secret Key',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: _showEditDialog,
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 18,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.vpn_key, color: Colors.orange, size: 28),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          _secretKey != null && _secretKey!.isNotEmpty
+                              ? '*' * _secretKey!.length
+                              : 'Tap to set secret key',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: Colors.black87,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                      const Icon(Icons.edit, color: Colors.blueAccent),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+// (Removed duplicate ConfigPage and stray imports)
 
 void main() {
   runApp(PasswordManagerApp());
@@ -158,6 +297,59 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
   }
 
   Future<void> _uploadPasswords() async {
+    final storage = FlutterSecureStorage();
+    String? secretKey = await storage.read(key: 'secret_key');
+    if (secretKey == null || secretKey.isEmpty) {
+      // Prompt user to enter secret key
+      final controller = TextEditingController();
+      String? errorText;
+      bool? submitted = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) => AlertDialog(
+              title: const Text('Enter Secret Key'),
+              content: TextField(
+                controller: controller,
+                maxLength: 16,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  hintText: 'Enter 16 character secret key',
+                  errorText: errorText,
+                ),
+                autofocus: true,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (controller.text.length != 16) {
+                      setState(
+                        () => errorText =
+                            'Secret Key must be exactly 16 characters',
+                      );
+                      return;
+                    }
+                    secretKey = controller.text;
+                    storage.write(key: 'secret_key', value: secretKey);
+                    Navigator.of(context).pop(true);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      if (submitted != true) {
+        // User cancelled
+        return;
+      }
+    }
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -168,7 +360,20 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
         return;
       }
       final file = File(result.files.single.path!);
-      final content = await file.readAsString();
+      final encryptedContent = await file.readAsString();
+      String content;
+      try {
+        content = AESHelper.decrypt(encryptedContent, secretKey!);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Failed to decrypt file. Please check your secret key.',
+            ),
+          ),
+        );
+        return;
+      }
       final entries = content.split('---');
       int added = 0;
       for (final entry in entries) {
@@ -215,6 +420,18 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
   }
 
   Future<void> _downloadPasswords() async {
+    final storage = FlutterSecureStorage();
+    final secretKey = await storage.read(key: 'secret_key');
+    if (secretKey == null || secretKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please set your Secret Key in Config before downloading.',
+          ),
+        ),
+      );
+      return;
+    }
     try {
       final buffer = StringBuffer();
       for (final entry in _passwords) {
@@ -225,6 +442,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
         buffer.writeln('---');
       }
       final text = buffer.toString();
+      final encrypted = AESHelper.encrypt(text, secretKey);
 
       // Format: 2025_08_17_01_34_PM_password.txt
       final now = DateTime.now();
@@ -243,7 +461,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
       }
       if (Platform.isAndroid || Platform.isIOS) {
         final params = SaveFileDialogParams(
-          data: Uint8List.fromList(text.codeUnits),
+          data: Uint8List.fromList(encrypted.codeUnits),
           fileName: dateStr,
         );
         final filePath = await FlutterFileDialog.saveFile(params: params);
@@ -266,7 +484,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           return;
         }
         final file = File(outputPath);
-        await file.writeAsString(text);
+        await file.writeAsString(encrypted);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Passwords saved to: $outputPath')),
         );
@@ -469,6 +687,15 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
       appBar: AppBar(
         title: const Text('Password Manager'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Config',
+            onPressed: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ConfigPage()));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.download),
             tooltip: 'Download as TXT',

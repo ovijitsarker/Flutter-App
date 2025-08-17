@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:flutter/foundation.dart';
 
 void main() {
   runApp(PasswordManagerApp());
@@ -129,10 +133,157 @@ class PasswordListScreen extends StatefulWidget {
 }
 
 class _PasswordListScreenState extends State<PasswordListScreen> {
+  void _confirmDeletePassword(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Password'),
+        content: const Text('Are you sure you want to delete this password?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deletePassword(index);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uploadPasswords() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['txt'],
+      );
+      if (result == null || result.files.single.path == null) {
+        // User canceled
+        return;
+      }
+      final file = File(result.files.single.path!);
+      final content = await file.readAsString();
+      final entries = content.split('---');
+      int added = 0;
+      for (final entry in entries) {
+        final lines = entry.trim().split('\n');
+        if (lines.length < 2) continue;
+        String title = '', password = '', passkey = '', remarks = '';
+        for (final line in lines) {
+          if (line.startsWith('Title:')) {
+            title = line.replaceFirst('Title:', '').trim();
+          } else if (line.startsWith('Password:')) {
+            password = line.replaceFirst('Password:', '').trim();
+          } else if (line.startsWith('Passkey:')) {
+            passkey = line.replaceFirst('Passkey:', '').trim();
+          } else if (line.startsWith('Remarks:')) {
+            remarks = line.replaceFirst('Remarks:', '').trim();
+          }
+        }
+        if (title.isNotEmpty && password.isNotEmpty) {
+          _passwords.add({
+            'title': title,
+            'password': password,
+            'passkey': passkey,
+            'remarks': remarks,
+          });
+          added++;
+        }
+      }
+      if (added > 0) {
+        await _savePasswords();
+        setState(() {});
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Imported $added password(s)')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No valid passwords found in file.')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to import: $e')));
+    }
+  }
+
+  Future<void> _downloadPasswords() async {
+    try {
+      final buffer = StringBuffer();
+      for (final entry in _passwords) {
+        buffer.writeln('Title:    \t${entry['title'] ?? ''}');
+        buffer.writeln('Password: \t${entry['password'] ?? ''}');
+        buffer.writeln('Passkey:  \t${entry['passkey'] ?? ''}');
+        buffer.writeln('Remarks:  \t${entry['remarks'] ?? ''}');
+        buffer.writeln('---');
+      }
+      final text = buffer.toString();
+
+      // Format: 2025_08_17_01_34_PM_password.txt
+      final now = DateTime.now();
+      String twoDigits(int n) => n.toString().padLeft(2, '0');
+      int hour = now.hour;
+      String ampm = hour >= 12 ? 'pm' : 'am';
+      int hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final dateStr =
+          '${now.year}${twoDigits(now.month)}${twoDigits(now.day)}${twoDigits(hour12)}${twoDigits(now.minute)}${ampm}_password.txt';
+
+      if (kIsWeb) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Export not supported on web.')),
+        );
+        return;
+      }
+      if (Platform.isAndroid || Platform.isIOS) {
+        final params = SaveFileDialogParams(
+          data: Uint8List.fromList(text.codeUnits),
+          fileName: dateStr,
+        );
+        final filePath = await FlutterFileDialog.saveFile(params: params);
+        if (filePath != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Passwords saved to: $filePath')),
+          );
+        } else {
+          // User cancelled
+        }
+      } else {
+        String? outputPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save Passwords As',
+          fileName: dateStr,
+          type: FileType.custom,
+          allowedExtensions: ['txt'],
+        );
+        if (outputPath == null) {
+          // User canceled the picker
+          return;
+        }
+        final file = File(outputPath);
+        await file.writeAsString(text);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Passwords saved to: $outputPath')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save file: $e')));
+    }
+  }
+
   String _searchQuery = '';
   final List<Map<String, String>> _passwords = [];
   final _storage = const FlutterSecureStorage();
   final String _storageKey = 'passwords';
+  final Map<int, bool> _showPassword = {};
+  final Map<int, bool> _expanded = {};
 
   @override
   void initState() {
@@ -317,6 +468,18 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Password Manager'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Download as TXT',
+            onPressed: _downloadPasswords,
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload_file),
+            tooltip: 'Upload TXT',
+            onPressed: _uploadPasswords,
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -337,34 +500,171 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           ),
         ),
       ),
-      body: ListView.builder(
+      body: ListView.separated(
         itemCount: filteredPasswords.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        padding: const EdgeInsets.all(12),
         itemBuilder: (context, index) {
           final item = filteredPasswords[index];
-          // Find the real index in the original list for edit/delete
           final realIndex = _passwords.indexOf(item);
-          return Dismissible(
-            key: Key('${item['title']}_${item['password']}_$realIndex'),
-            direction: DismissDirection.endToStart,
-            background: Container(
-              color: Colors.red,
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: const Icon(Icons.delete, color: Colors.white),
+          final isVisible = _showPassword[realIndex] ?? false;
+          final isExpanded = _expanded[realIndex] ?? false;
+          return Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            onDismissed: (_) => _deletePassword(realIndex),
-            child: ListTile(
-              title: Text(item['title'] ?? ''),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Password: ${item['password'] ?? ''}'),
-                  Text('Passkey: ${item['passkey'] ?? ''}'),
-                  Text('Remarks: ${item['remarks'] ?? ''}'),
-                ],
-              ),
-              isThreeLine: true,
-              onTap: () => _showEditPasswordDialog(realIndex),
+            child: Column(
+              children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _showEditPasswordDialog(realIndex),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['title'] ?? '',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.lock_outline,
+                                    size: 18,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      isVisible
+                                          ? (item['password'] ?? '')
+                                          : (item['password'] != null
+                                                ? '*' *
+                                                      (item['password']!.length)
+                                                : ''),
+                                      style: const TextStyle(
+                                        letterSpacing: 2,
+                                        fontSize: 16,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            isVisible ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.blueAccent,
+                          ),
+                          tooltip: isVisible
+                              ? 'Hide Password'
+                              : 'Show Password',
+                          onPressed: () {
+                            setState(() {
+                              _showPassword[realIndex] = !isVisible;
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: AnimatedRotation(
+                            turns: isExpanded ? 0.5 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 28,
+                            ),
+                          ),
+                          tooltip: isExpanded ? 'Collapse' : 'Expand',
+                          onPressed: () {
+                            setState(() {
+                              _expanded[realIndex] = !isExpanded;
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          tooltip: 'Delete',
+                          onPressed: () => _confirmDeletePassword(realIndex),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if ((item['passkey'] ?? '').isNotEmpty) ...[
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.vpn_key,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  item['passkey'] ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if ((item['remarks'] ?? '').isNotEmpty) ...[
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.comment,
+                                size: 18,
+                                color: Colors.green,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  item['remarks'] ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.black54,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  crossFadeState: isExpanded
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 200),
+                ),
+              ],
             ),
           );
         },

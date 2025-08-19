@@ -810,175 +810,193 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           ),
         ),
       ),
-      body: ListView.separated(
-        itemCount: filteredPasswords.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 12),
-        padding: const EdgeInsets.all(12),
-        itemBuilder: (context, index) {
-          final item = filteredPasswords[index];
-          final realIndex = _passwords.indexOf(item);
-          final isVisible = _showPassword[realIndex] ?? false;
-          final isExpanded = _expanded[realIndex] ?? false;
-          return Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => _showEditPasswordDialog(realIndex),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
+      body: filteredPasswords.isEmpty
+          ? Center(
+              child: Text(
+                'No passwords found.',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            )
+          : ListView.separated(
+              itemCount: filteredPasswords.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              padding: const EdgeInsets.all(12),
+              itemBuilder: (context, index) {
+                final item = filteredPasswords[index];
+                final realIndex = _passwords.indexOf(item);
+                final isVisible = _showPassword[realIndex] ?? false;
+                final isExpanded = _expanded[realIndex] ?? false;
+                return Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => _showEditPasswordDialog(realIndex),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['title'] ?? '',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.lock_outline,
+                                          size: 18,
+                                          color: Colors.grey,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            isVisible
+                                                ? (item['password'] ?? '')
+                                                : (item['password'] != null
+                                                      ? '*' *
+                                                            (item['password']!
+                                                                .length)
+                                                      : ''),
+                                            style: const TextStyle(
+                                              letterSpacing: 2,
+                                              fontSize: 16,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  isVisible
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.blueAccent,
+                                ),
+                                tooltip: isVisible
+                                    ? 'Hide Password'
+                                    : 'Show Password',
+                                onPressed: () {
+                                  setState(() {
+                                    _showPassword[realIndex] = !isVisible;
+                                  });
+                                },
+                              ),
+                              IconButton(
+                                icon: AnimatedRotation(
+                                  turns: isExpanded ? 0.5 : 0.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 28,
+                                  ),
+                                ),
+                                tooltip: isExpanded ? 'Collapse' : 'Expand',
+                                onPressed: () {
+                                  setState(() {
+                                    _expanded[realIndex] = !isExpanded;
+                                  });
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                tooltip: 'Delete',
+                                onPressed: () =>
+                                    _confirmDeletePassword(realIndex),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      AnimatedCrossFade(
+                        firstChild: const SizedBox.shrink(),
+                        secondChild: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                item['title'] ?? '',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.lock_outline,
-                                    size: 18,
-                                    color: Colors.grey,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      isVisible
-                                          ? (item['password'] ?? '')
-                                          : (item['password'] != null
-                                                ? '*' *
-                                                      (item['password']!.length)
-                                                : ''),
-                                      style: const TextStyle(
-                                        letterSpacing: 2,
-                                        fontSize: 16,
-                                        color: Colors.black87,
+                              if ((item['passkey'] ?? '').isNotEmpty) ...[
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.vpn_key,
+                                      size: 18,
+                                      color: Colors.orange,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        item['passkey'] ?? '',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.black87,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            isVisible ? Icons.visibility_off : Icons.visibility,
-                            color: Colors.blueAccent,
-                          ),
-                          tooltip: isVisible
-                              ? 'Hide Password'
-                              : 'Show Password',
-                          onPressed: () {
-                            setState(() {
-                              _showPassword[realIndex] = !isVisible;
-                            });
-                          },
-                        ),
-                        IconButton(
-                          icon: AnimatedRotation(
-                            turns: isExpanded ? 0.5 : 0.0,
-                            duration: const Duration(milliseconds: 200),
-                            child: const Icon(
-                              Icons.keyboard_arrow_down,
-                              size: 28,
-                            ),
-                          ),
-                          tooltip: isExpanded ? 'Collapse' : 'Expand',
-                          onPressed: () {
-                            setState(() {
-                              _expanded[realIndex] = !isExpanded;
-                            });
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          tooltip: 'Delete',
-                          onPressed: () => _confirmDeletePassword(realIndex),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                AnimatedCrossFade(
-                  firstChild: const SizedBox.shrink(),
-                  secondChild: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if ((item['passkey'] ?? '').isNotEmpty) ...[
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.vpn_key,
-                                size: 18,
-                                color: Colors.orange,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  item['passkey'] ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: Colors.black87,
-                                  ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                        ],
-                        if ((item['remarks'] ?? '').isNotEmpty) ...[
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.comment,
-                                size: 18,
-                                color: Colors.green,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  item['remarks'] ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: Colors.black54,
-                                    fontStyle: FontStyle.italic,
-                                  ),
+                                const SizedBox(height: 6),
+                              ],
+                              if ((item['remarks'] ?? '').isNotEmpty) ...[
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.comment,
+                                      size: 18,
+                                      color: Colors.green,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        item['remarks'] ?? '',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.black54,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
+                              ],
                             ],
                           ),
-                        ],
-                      ],
-                    ),
+                        ),
+                        crossFadeState: isExpanded
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        duration: const Duration(milliseconds: 200),
+                      ),
+                    ],
                   ),
-                  crossFadeState: isExpanded
-                      ? CrossFadeState.showSecond
-                      : CrossFadeState.showFirst,
-                  duration: const Duration(milliseconds: 200),
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddPasswordDialog,
         child: const Icon(Icons.add),

@@ -462,10 +462,12 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
       for (final entry in entries) {
         final lines = entry.trim().split('\n');
         if (lines.length < 2) continue;
-        String title = '', password = '', passkey = '', remarks = '';
+        String title = '', url = '', password = '', passkey = '', remarks = '';
         for (final line in lines) {
           if (line.startsWith('Title:')) {
             title = line.replaceFirst('Title:', '').trim();
+          } else if (line.startsWith('URL:')) {
+            url = line.replaceFirst('URL:', '').trim();
           } else if (line.startsWith('Password:')) {
             password = line.replaceFirst('Password:', '').trim();
           } else if (line.startsWith('Passkey:')) {
@@ -477,6 +479,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
         if (title.isNotEmpty && password.isNotEmpty) {
           _passwords.add({
             'title': title,
+            'url': url,
             'password': password,
             'passkey': passkey,
             'remarks': remarks,
@@ -519,6 +522,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
       final buffer = StringBuffer();
       for (final entry in _passwords) {
         buffer.writeln('Title:    \t${entry['title'] ?? ''}');
+        buffer.writeln('URL:      \t${entry['url'] ?? ''}');
         buffer.writeln('Password: \t${entry['password'] ?? ''}');
         buffer.writeln('Passkey:  \t${entry['passkey'] ?? ''}');
         buffer.writeln('Remarks:  \t${entry['remarks'] ?? ''}');
@@ -601,9 +605,10 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           // Support backward compatibility for old entries
           return {
             'title': parts.length > 0 ? parts[0] : '',
-            'password': parts.length > 1 ? parts[1] : '',
-            'passkey': parts.length > 2 ? parts[2] : '',
-            'remarks': parts.length > 3 ? parts[3] : '',
+            'url': parts.length > 1 ? parts[1] : '',
+            'password': parts.length > 2 ? parts[2] : '',
+            'passkey': parts.length > 3 ? parts[3] : '',
+            'remarks': parts.length > 4 ? parts[4] : '',
           };
         }),
       );
@@ -618,7 +623,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     final data = _passwords
         .map(
           (e) =>
-              '${e['title']}::${e['password']}::${e['passkey'] ?? ''}::${e['remarks'] ?? ''}',
+              '${e['title']}::${e['url'] ?? ''}::${e['password']}::${e['passkey'] ?? ''}::${e['remarks'] ?? ''}',
         )
         .join('|');
     await _storage.write(key: _storageKey, value: data);
@@ -626,6 +631,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
 
   void _addPassword(
     String title,
+    String url,
     String password,
     String passkey,
     String remarks,
@@ -633,6 +639,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     setState(() {
       _passwords.add({
         'title': title,
+        'url': url,
         'password': password,
         'passkey': passkey,
         'remarks': remarks,
@@ -644,6 +651,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
   void _editPassword(
     int index,
     String newTitle,
+    String newUrl,
     String newPassword,
     String newPasskey,
     String newRemarks,
@@ -651,6 +659,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     setState(() {
       _passwords[index] = {
         'title': newTitle,
+        'url': newUrl,
         'password': newPassword,
         'passkey': newPasskey,
         'remarks': newRemarks,
@@ -668,8 +677,8 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
 
   void _showAddPasswordDialog() {
     _showPasswordDialog(
-      onSave: (title, password, passkey, remarks) {
-        _addPassword(title, password, passkey, remarks);
+      onSave: (title, url, password, passkey, remarks) {
+        _addPassword(title, url, password, passkey, remarks);
       },
     );
   }
@@ -678,11 +687,12 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     final current = _passwords[index];
     _showPasswordDialog(
       initialTitle: current['title'] ?? '',
+      initialUrl: current['url'] ?? '',
       initialPassword: current['password'] ?? '',
       initialPasskey: current['passkey'] ?? '',
       initialRemarks: current['remarks'] ?? '',
-      onSave: (title, password, passkey, remarks) {
-        _editPassword(index, title, password, passkey, remarks);
+      onSave: (title, url, password, passkey, remarks) {
+        _editPassword(index, title, url, password, passkey, remarks);
       },
     );
   }
@@ -692,13 +702,16 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     String initialPassword = '',
     String initialPasskey = '',
     String initialRemarks = '',
-    required void Function(String, String, String, String) onSave,
+    required void Function(String, String, String, String, String) onSave,
+    String initialUrl = '',
   }) {
     String title = initialTitle;
+    String url = initialUrl;
     String password = initialPassword;
     String passkey = initialPasskey;
     String remarks = initialRemarks;
     final titleController = TextEditingController(text: initialTitle);
+    final urlController = TextEditingController(text: initialUrl);
     final passwordController = TextEditingController(text: initialPassword);
     final passkeyController = TextEditingController(text: initialPasskey);
     final remarksController = TextEditingController(text: initialRemarks);
@@ -714,6 +727,11 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                 decoration: const InputDecoration(labelText: 'Title'),
                 controller: titleController,
                 onChanged: (value) => title = value,
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: 'URL'),
+                controller: urlController,
+                onChanged: (value) => url = value,
               ),
               TextField(
                 decoration: const InputDecoration(labelText: 'Password'),
@@ -743,7 +761,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           ElevatedButton(
             onPressed: () {
               if (title.isNotEmpty && password.isNotEmpty) {
-                onSave(title, password, passkey, remarks);
+                onSave(title, url, password, passkey, remarks);
                 Navigator.of(context).pop();
               }
             },
@@ -858,6 +876,31 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                                         fontSize: 18,
                                       ),
                                     ),
+                                    if ((item['url'] ?? '').isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.link,
+                                            size: 16,
+                                            color: Colors.blueGrey,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              item['url'] ?? '',
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                color: Colors.blueGrey,
+                                                decoration:
+                                                    TextDecoration.underline,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [

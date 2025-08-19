@@ -170,30 +170,113 @@ class LandingPage extends StatelessWidget {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Welcome to Password Manager',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => AuthGate()),
-                  );
-                },
-                child: const Text('Continue'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(180, 48),
-                ),
-              ),
-            ],
-          ),
+          child: _LandingPageContent(),
         ),
       ),
+    );
+  }
+}
+
+class _LandingPageContent extends StatefulWidget {
+  @override
+  State<_LandingPageContent> createState() => _LandingPageContentState();
+}
+
+class _LandingPageContentState extends State<_LandingPageContent> {
+  bool _showPasswordField = false;
+  final _passwordController = TextEditingController();
+  String? _errorText;
+  bool _obscurePassword = true;
+
+  String _getCurrentPassword() {
+    final now = DateTime.now();
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hhmm = twoDigits(now.hour) + twoDigits(now.minute);
+    final dd = twoDigits(now.day);
+    final mm = twoDigits(now.month);
+    final yyyy = now.year.toString();
+    return hhmm + dd + mm + yyyy;
+  }
+
+  void _onContinuePressed() {
+    setState(() {
+      _showPasswordField = true;
+      _errorText = null;
+    });
+  }
+
+  void _onPasswordSubmit() {
+    final input = _passwordController.text.trim();
+    final expected = _getCurrentPassword();
+    if (input == expected) {
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => AuthGate()));
+    } else {
+      setState(() {
+        _errorText = 'Incorrect password.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text(
+          'Welcome to Password Manager',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        if (!_showPasswordField)
+          ElevatedButton(
+            onPressed: _onContinuePressed,
+            child: const Text('Continue'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(180, 48)),
+          ),
+        if (_showPasswordField) ...[
+          const Text(
+            'Enter password', //(current time and date, e.g. 133519082025)
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passwordController,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Password',
+              errorText: _errorText,
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
+            keyboardType: TextInputType.number,
+            onSubmitted: (_) => _onPasswordSubmit(),
+            autofocus: true,
+            obscureText: _obscurePassword,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Today is a gift, that's why they call it Present.",
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: _onPasswordSubmit,
+            child: const Text('Submit'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(120, 44)),
+          ),
+        ],
+      ],
     );
   }
 }

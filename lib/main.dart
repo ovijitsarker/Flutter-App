@@ -462,10 +462,22 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
       for (final entry in entries) {
         final lines = entry.trim().split('\n');
         if (lines.length < 2) continue;
-        String title = '', password = '', passkey = '', remarks = '';
+        String title = '',
+            url = '',
+            email = '',
+            username = '',
+            password = '',
+            passkey = '',
+            remarks = '';
         for (final line in lines) {
           if (line.startsWith('Title:')) {
             title = line.replaceFirst('Title:', '').trim();
+          } else if (line.startsWith('URL:')) {
+            url = line.replaceFirst('URL:', '').trim();
+          } else if (line.startsWith('Email:')) {
+            email = line.replaceFirst('Email:', '').trim();
+          } else if (line.startsWith('User Name:')) {
+            username = line.replaceFirst('User Name:', '').trim();
           } else if (line.startsWith('Password:')) {
             password = line.replaceFirst('Password:', '').trim();
           } else if (line.startsWith('Passkey:')) {
@@ -477,6 +489,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
         if (title.isNotEmpty && password.isNotEmpty) {
           _passwords.add({
             'title': title,
+            'url': url,
+            'email': email,
+            'username': username,
             'password': password,
             'passkey': passkey,
             'remarks': remarks,
@@ -519,6 +534,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
       final buffer = StringBuffer();
       for (final entry in _passwords) {
         buffer.writeln('Title:    \t${entry['title'] ?? ''}');
+        buffer.writeln('URL:      \t${entry['url'] ?? ''}');
+        buffer.writeln('Email:    \t${entry['email'] ?? ''}');
+        buffer.writeln('User Name:\t${entry['username'] ?? ''}');
         buffer.writeln('Password: \t${entry['password'] ?? ''}');
         buffer.writeln('Passkey:  \t${entry['passkey'] ?? ''}');
         buffer.writeln('Remarks:  \t${entry['remarks'] ?? ''}');
@@ -562,15 +580,13 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           type: FileType.custom,
           allowedExtensions: ['txt'],
         );
-        if (outputPath == null) {
-          // User canceled the picker
-          return;
+        if (outputPath != null) {
+          final file = File(outputPath);
+          await file.writeAsString(encrypted);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Passwords saved to: $outputPath')),
+          );
         }
-        final file = File(outputPath);
-        await file.writeAsString(encrypted);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Passwords saved to: $outputPath')),
-        );
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -601,9 +617,10 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           // Support backward compatibility for old entries
           return {
             'title': parts.length > 0 ? parts[0] : '',
-            'password': parts.length > 1 ? parts[1] : '',
-            'passkey': parts.length > 2 ? parts[2] : '',
-            'remarks': parts.length > 3 ? parts[3] : '',
+            'url': parts.length > 1 ? parts[1] : '',
+            'password': parts.length > 2 ? parts[2] : '',
+            'passkey': parts.length > 3 ? parts[3] : '',
+            'remarks': parts.length > 4 ? parts[4] : '',
           };
         }),
       );
@@ -618,7 +635,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     final data = _passwords
         .map(
           (e) =>
-              '${e['title']}::${e['password']}::${e['passkey'] ?? ''}::${e['remarks'] ?? ''}',
+              '${e['title']}::${e['url'] ?? ''}::${e['password']}::${e['passkey'] ?? ''}::${e['remarks'] ?? ''}',
         )
         .join('|');
     await _storage.write(key: _storageKey, value: data);
@@ -626,6 +643,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
 
   void _addPassword(
     String title,
+    String url,
+    String email,
+    String username,
     String password,
     String passkey,
     String remarks,
@@ -633,6 +653,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     setState(() {
       _passwords.add({
         'title': title,
+        'url': url,
+        'email': email,
+        'username': username,
         'password': password,
         'passkey': passkey,
         'remarks': remarks,
@@ -644,6 +667,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
   void _editPassword(
     int index,
     String newTitle,
+    String newUrl,
+    String newEmail,
+    String newUsername,
     String newPassword,
     String newPasskey,
     String newRemarks,
@@ -651,6 +677,9 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     setState(() {
       _passwords[index] = {
         'title': newTitle,
+        'url': newUrl,
+        'email': newEmail,
+        'username': newUsername,
         'password': newPassword,
         'passkey': newPasskey,
         'remarks': newRemarks,
@@ -668,8 +697,8 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
 
   void _showAddPasswordDialog() {
     _showPasswordDialog(
-      onSave: (title, password, passkey, remarks) {
-        _addPassword(title, password, passkey, remarks);
+      onSave: (title, url, email, username, password, passkey, remarks) {
+        _addPassword(title, url, email, username, password, passkey, remarks);
       },
     );
   }
@@ -678,78 +707,146 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     final current = _passwords[index];
     _showPasswordDialog(
       initialTitle: current['title'] ?? '',
+      initialUrl: current['url'] ?? '',
+      initialEmail: current['email'] ?? '',
+      initialUsername: current['username'] ?? '',
       initialPassword: current['password'] ?? '',
       initialPasskey: current['passkey'] ?? '',
       initialRemarks: current['remarks'] ?? '',
-      onSave: (title, password, passkey, remarks) {
-        _editPassword(index, title, password, passkey, remarks);
+      onSave: (title, url, email, username, password, passkey, remarks) {
+        _editPassword(
+          index,
+          title,
+          url,
+          email,
+          username,
+          password,
+          passkey,
+          remarks,
+        );
       },
     );
   }
 
   void _showPasswordDialog({
     String initialTitle = '',
+    String initialUrl = '',
+    String initialEmail = '',
+    String initialUsername = '',
     String initialPassword = '',
     String initialPasskey = '',
     String initialRemarks = '',
-    required void Function(String, String, String, String) onSave,
+    required void Function(
+      String,
+      String,
+      String,
+      String,
+      String,
+      String,
+      String,
+    )
+    onSave,
   }) {
     String title = initialTitle;
+    String url = initialUrl;
+    String email = initialEmail;
+    String username = initialUsername;
     String password = initialPassword;
     String passkey = initialPasskey;
     String remarks = initialRemarks;
     final titleController = TextEditingController(text: initialTitle);
+    final urlController = TextEditingController(text: initialUrl);
+    final emailController = TextEditingController(text: initialEmail);
+    final usernameController = TextEditingController(text: initialUsername);
     final passwordController = TextEditingController(text: initialPassword);
     final passkeyController = TextEditingController(text: initialPasskey);
     final remarksController = TextEditingController(text: initialRemarks);
+    bool showPassword = false;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(initialTitle.isEmpty ? 'Add Password' : 'Edit Password'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                decoration: const InputDecoration(labelText: 'Title'),
-                controller: titleController,
-                onChanged: (value) => title = value,
-              ),
-              TextField(
-                decoration: const InputDecoration(labelText: 'Password'),
-                controller: passwordController,
-                onChanged: (value) => password = value,
-                obscureText: true,
-              ),
-              TextField(
-                decoration: const InputDecoration(labelText: 'Passkey'),
-                controller: passkeyController,
-                onChanged: (value) => passkey = value,
-              ),
-              TextField(
-                decoration: const InputDecoration(labelText: 'Remarks'),
-                controller: remarksController,
-                onChanged: (value) => remarks = value,
-                maxLines: 2,
-              ),
-            ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(initialTitle.isEmpty ? 'Add Password' : 'Edit Password'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Title'),
+                  controller: titleController,
+                  onChanged: (value) => title = value,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'URL'),
+                  controller: urlController,
+                  onChanged: (value) => url = value,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  controller: emailController,
+                  onChanged: (value) => email = value,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'User Name'),
+                  controller: usernameController,
+                  onChanged: (value) => username = value,
+                ),
+                TextField(
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showPassword ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          showPassword = !showPassword;
+                        });
+                      },
+                    ),
+                  ),
+                  controller: passwordController,
+                  onChanged: (value) => password = value,
+                  obscureText: !showPassword,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Passkey'),
+                  controller: passkeyController,
+                  onChanged: (value) => passkey = value,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Remarks'),
+                  controller: remarksController,
+                  onChanged: (value) => remarks = value,
+                  maxLines: 2,
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (title.isNotEmpty && password.isNotEmpty) {
+                  onSave(
+                    title,
+                    url,
+                    email,
+                    username,
+                    password,
+                    passkey,
+                    remarks,
+                  );
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (title.isNotEmpty && password.isNotEmpty) {
-                onSave(title, password, passkey, remarks);
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -858,6 +955,78 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                                         fontSize: 18,
                                       ),
                                     ),
+                                    if ((item['url'] ?? '').isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.link,
+                                            size: 16,
+                                            color: Colors.blueGrey,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              item['url'] ?? '',
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                color: Colors.blueGrey,
+                                                decoration:
+                                                    TextDecoration.underline,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if ((item['email'] ?? '').isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.email,
+                                            size: 16,
+                                            color: Colors.deepPurple,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              item['email'] ?? '',
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                color: Colors.deepPurple,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if ((item['username'] ?? '')
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.person,
+                                            size: 16,
+                                            color: Colors.indigo,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              item['username'] ?? '',
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                color: Colors.indigo,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [

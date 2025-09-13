@@ -1,4 +1,4 @@
-# flutter_app
+# password_manager
 
 A new Flutter project.
 

@@ -371,7 +371,10 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
               Navigator.of(context).pop();
               _deletePassword(index);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 212, 93, 84),
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -618,9 +621,11 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
           return {
             'title': parts.length > 0 ? parts[0] : '',
             'url': parts.length > 1 ? parts[1] : '',
-            'password': parts.length > 2 ? parts[2] : '',
-            'passkey': parts.length > 3 ? parts[3] : '',
-            'remarks': parts.length > 4 ? parts[4] : '',
+            'email': parts.length > 2 ? parts[2] : '',
+            'username': parts.length > 3 ? parts[3] : '',
+            'password': parts.length > 4 ? parts[4] : '',
+            'passkey': parts.length > 5 ? parts[5] : '',
+            'remarks': parts.length > 6 ? parts[6] : '',
           };
         }),
       );
@@ -635,7 +640,13 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
     final data = _passwords
         .map(
           (e) =>
-              '${e['title']}::${e['url'] ?? ''}::${e['password']}::${e['passkey'] ?? ''}::${e['remarks'] ?? ''}',
+              '${e['title'] ?? ''}::'
+              '${e['url'] ?? ''}::'
+              '${e['email'] ?? ''}::'
+              '${e['username'] ?? ''}::'
+              '${e['password'] ?? ''}::'
+              '${e['passkey'] ?? ''}::'
+              '${e['remarks'] ?? ''}',
         )
         .join('|');
     await _storage.write(key: _storageKey, value: data);
@@ -1062,7 +1073,12 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                                   isVisible
                                       ? Icons.visibility_off
                                       : Icons.visibility,
-                                  color: Colors.blueAccent,
+                                  color: const Color.fromARGB(
+                                    255,
+                                    87,
+                                    113,
+                                    160,
+                                  ),
                                 ),
                                 tooltip: isVisible
                                     ? 'Hide Password'
@@ -1092,7 +1108,7 @@ class _PasswordListScreenState extends State<PasswordListScreen> {
                               IconButton(
                                 icon: const Icon(
                                   Icons.delete,
-                                  color: Colors.red,
+                                  color: Color.fromARGB(255, 212, 93, 84),
                                 ),
                                 tooltip: 'Delete',
                                 onPressed: () =>
